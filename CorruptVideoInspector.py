@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import csv
 import os
 import subprocess
@@ -10,7 +12,10 @@ import time
 from threading import Thread
 from tkinter import filedialog
 from tkinter import ttk
-from tkmacosx import Button as MacButton
+try:
+    from tkmacosx import Button
+except ImportError:
+    from tkinter import Button
 from datetime import datetime
 
 VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.wmv', '.mkv', '.flv', '.webm', '.m4v', '.m4p', '.mpeg', '.mpg', '.3gp', '.3g2']
@@ -24,10 +29,17 @@ class VideoObject():
 
 # ========================= FUNCTIONS ==========================
 
+def omniLog(msg, log_file):
+    if log_file:
+        log_file.write(msg)
+        log_file.flush()
+    print(msg)
+    
+
 def isMacOs():
     if 'Darwin' in platform.system():
         return True
-    return False
+    return True
 
 def isWindowsOs():
     if 'Windows' in platform.system():
@@ -59,7 +71,10 @@ def convertTime(seconds):
 
 def truncateFilename(input):
     file_name, file_extension = os.path.splitext(input)
-    if isMacOs() and len(file_name) > 50:
+    if isLinuxOs() and len(file_name) > 49:
+        truncated_string = file_name[0:48]
+        return f'{truncated_string}..{file_extension}'
+    elif isMacOs() and len(file_name) > 50:
         truncated_string = file_name[0:49]
         return f'{truncated_string}..{file_extension}'
     elif isWindowsOs() and len(file_name) > 42:
@@ -106,7 +121,15 @@ def verify_ffmpeg_still_running(root):
     output = ''
     cpu_usage = ''
 
-    if isMacOs():
+    if isLinuxOs(): #Need to run Linux check first, Linux (at least mine) also registers as Darwin?! so we need to target the right system
+        proc = subprocess.Popen("ps -Ao comm,pcpu | grep ffmpeg", shell=True, stdout=subprocess.PIPE)
+        output = proc.communicate()[0].decode('utf-8').strip()
+        if "ffmpeg" in output:
+            cpu_usage = output.split()[1]
+            output = f"ffmpeg is currently running.\nffmpeg is currently using {cpu_usage}% of CPU"
+        else:
+            output = "ffmpeg is NOT currently running!"
+    elif isMacOs():
         proc = subprocess.Popen("ps -Ao comm,pcpu -r | head -n 10 | grep ffmpeg", shell=True, stdout=subprocess.PIPE)
         output = proc.communicate()[0].decode('utf-8').strip()
         if "ffmpeg" in output:
@@ -114,7 +137,7 @@ def verify_ffmpeg_still_running(root):
             output = f"ffmpeg is currently running.\nffmpeg is currently using {cpu_usage}% of CPU"
         else:
             output = "ffmpeg is NOT currently running!"
-    if isWindowsOs():
+    elif isWindowsOs():
         windowsFfmpegCpuCalculationPrimer()
         found = False
         process_names = [proc for proc in psutil.process_iter()]
@@ -127,52 +150,56 @@ def verify_ffmpeg_still_running(root):
             output = f"ffmpeg is currently running.\nffmpeg is currently using {cpu_usage}% of CPU"
         else:
             output = "ffmpeg is NOT currently running!"
-
+    else:
+        output = "Your system is unknown,\nso it's not possible to tell if ffmpeg is running.\nConsider submitting a patch?"
     label_ffmpeg_result = tk.Label(ffmpeg_window, width=375, text=output, font=('Helvetica', 14))
     label_ffmpeg_result.pack(fill=tk.X, pady=20)
 
-def kill_ffmpeg_warning(root, log_file):
-    ffmpeg_kill_window = tk.Toplevel(root)
-    ffmpeg_kill_window.resizable(False, False)
-    if isMacOs():
-        ffmpeg_kill_window.geometry("400x300")
-    elif isWindowsOs():
-        ffmpeg_kill_window.geometry("400x400")
-    ffmpeg_kill_window.title("Safely Quit Program")
+def kill_ffmpeg_warning(root):
+    global g_force_cancel_thread
+    if not g_force_cancel_thread:
+        ffmpeg_kill_window = tk.Toplevel(root)
+        ffmpeg_kill_window.resizable(False, False)
+        if isMacOs():
+            ffmpeg_kill_window.geometry("400x300")
+        else:
+            ffmpeg_kill_window.geometry("400x400")
+        ffmpeg_kill_window.title("Safely Quit Program")
 
-    label_ffmpeg_kill = tk.Label(ffmpeg_kill_window, wraplength=375, width=375, text="This application spawns a subprocess named 'ffmpeg'. If this program is quit using the 'X' button, for example, the 'ffmpeg' subprocess will continue to run in the background of the host computer, draining the CPU resources. Clicking the button below will terminate the 'ffmpeg' subprocess and safely quit the application. This will prematurely end all video processing. Only do this if you want to safely exit the program and clean all subprocesses", font=('Helvetica', 14))
-    label_ffmpeg_kill.pack(fill=tk.X, pady=20)
+        label_ffmpeg_kill = tk.Label(ffmpeg_kill_window, wraplength=375, width=375, text="This application spawns a subprocess named 'ffmpeg'. If this program is quit using the 'X' button, for example, the 'ffmpeg' subprocess will continue to run in the background of the host computer, draining the CPU resources. Clicking the button below will terminate the 'ffmpeg' subprocess and safely quit the application. This will prematurely end all video processing. Only do this if you want to safely exit the program and clean all subprocesses", font=('Helvetica', 14))
+        label_ffmpeg_kill.pack(fill=tk.X, pady=20)
 
-    if isMacOs():
-        # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
-        button_kill_ffmpeg = MacButton(ffmpeg_kill_window, background='#E34234', borderless=1, foreground='white', text="Terminate Program", width=500, command=lambda: kill_ffmpeg(root, log_file))
+        try: #Mac-specific button handling code is somehow getting run on some Linux systems. Changed imports, only difference is mac has 'borderless'
+            # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
+            button_kill_ffmpeg = Button(ffmpeg_kill_window, background='#E34234', borderless=1, foreground='white', text="Terminate Program", width=500, command=lambda: kill_ffmpeg(root))
+        except: #Windows or Linux - if the custom button fields don't exist, create the button without them
+            button_kill_ffmpeg = Button(ffmpeg_kill_window, background='#E34234', foreground='white', text="Terminate Program", width=200, command=lambda: kill_ffmpeg(root))
         button_kill_ffmpeg.pack(pady=10)
-    elif isWindowsOs():
-        button_kill_ffmpeg = tk.Button(ffmpeg_kill_window, background='#E34234', foreground='white', text="Terminate Program", width=200, command=lambda: kill_ffmpeg(root, log_file))
-        button_kill_ffmpeg.pack(pady=10)
+    else:
+        kill_ffmpeg(root)
 
-def kill_ffmpeg(root, log_file):
-    if isMacOs():
-        try:
+def kill_ffmpeg(root):
+    global log_file
+    global g_force_cancel_thread
+    g_force_cancel_thread = True
+    try:
+        omniLog(f'---USER MANUALLY TERMINATED PROGRAM---\n',log_file)
+        if isLinuxOs():
+            global g_lin_pid
+            os.killpg(os.getpgid(g_lin_pid), signal.SIGTERM)
+        elif isMacOs():
             global g_mac_pid
-            log_file.write(f'---USER MANUALLY TERMINATED PROGRAM---\n')
             os.killpg(os.getpgid(g_mac_pid), signal.SIGTERM)
-        except Exception as e:
-            log_file.write(f'ERROR in "kill_ffmpeg": {e}\n')
-            log_file.flush()
-    elif isWindowsOs():
-        try:
+        elif isWindowsOs():
             global g_windows_pid
             # os.kill(g_windows_pid, signal.CTRL_C_EVENT)
             # subprocess.Popen("taskkill /F /T /PID %i" % g_windows_pid, shell=True)
-            log_file.write(f'---USER MANUALLY TERMINATED PROGRAM---\n')
             for proc in psutil.process_iter():
                 if proc.name() == "ffmpeg.exe" or proc.name() == "CorruptVideoInspector.exe":
                     proc.kill()
-            log_file.flush()
-        except Exception as e:
-            log_file.write(f'ERROR in "kill_ffmpeg": {e}\n')
-            log_file.flush()
+    except Exception as e:
+        omniLog(f'ERROR in "kill_ffmpeg": {e}\n', log_file)
+    root.destroy()
 
 
 def estimatedTime(total_videos):
@@ -190,15 +217,15 @@ def estimatedTime(total_videos):
 def calculateProgress(count, total):
     return "{0}%".format(int((count / total) * 100))
 
-def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index_start, log_file, progress_bar):
+def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index_start, progress_bar):
     try:
         global g_count
         global g_currently_processing
+        global g_progress
+        global g_force_cancel_thread
+        global log_file
 
-        log_file.write('CREATED: _Logs.log\n')
-        log_file.write('CREATED: _Results.csv\n')
-        log_file.write('=================================================================\n')
-        log_file.flush()
+        omniLog('CREATED: _Logs.log\nCREATED: _Results.csv\n=================================================================\n', log_file)
 
         # CSV Results file
         results_file_path = os.path.join(directory, '_Results.csv')
@@ -216,13 +243,12 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
         totalVideoFiles = countAllVideoFiles(directory)
         start_time = datetime.now().strftime('%Y-%m-%d %I:%M %p')
 
-        log_file.write(f'DIRECTORY: {directory}\n')
-        log_file.write(f'TOTAL VIDEO FILES FOUND: {totalVideoFiles}\n')
-        log_file.write(f'STARTING FROM VIDEO INDEX: {index_start}\n')
-        log_file.write(f'START TIME: {start_time}\n')
-        log_file.write('=================================================================\n')
-        log_file.write('(DURATION IS IN HOURS:MINUTES:SECONDS)\n')
-        log_file.flush()
+        omniLog(f'DIRECTORY: {directory}\n'
+            f'TOTAL VIDEO FILES FOUND: {totalVideoFiles}\n'
+            f'STARTING FROM VIDEO INDEX: {index_start}\n'
+            f'START TIME: {start_time}\n'
+            '=================================================================\n'
+            '(DURATION IS IN HOURS:MINUTES:SECONDS)\n', log_file)
 
         all_videos_found = []
         for root, dirs, files in os.walk(directory):
@@ -233,27 +259,50 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
 
         # Alphabetize list
         all_videos_found.sort(key=lambda x: x.filename)
+        
+        def clickReveal(evt):
+            lb = evt.widget
+            values = [lb.get(i) for i in lb.curselection()]
+            paths = []
+            for value in values:
+                print("get path for", value)
+                paths+=[x.full_filepath for x in all_videos_found if x.filename == value]
+            print("selection:", paths)
+            tkinter_window.clipboard_clear()
+            tkinter_window.clipboard_append(",\n".join(paths))
+            
+        listbox_completed_videos.bind('<<ListboxSelect>>', clickReveal)
 
         count = 0
+        process_errors = 0
         for video in all_videos_found:
+            if g_force_cancel_thread: #This is set if we cancel ffmpeg...
+            #If we kill ffmpeg but don't stop the thread it may just start another.
+                print("Received kill signal for process thread...")
+                break
             if (index_start > count + 1):
                 count += 1
                 continue
 
             start_time = time.time()
 
-            global g_progress
             g_progress.set(calculateProgress(count, totalVideoFiles))
             tkinter_window.update()
 
-            g_count.set(f"{count + 1} / {totalVideoFiles}")
+            g_count.set(f"{count + 1} ({process_errors}) / {totalVideoFiles}")
             tkinter_window.update()
 
             g_currently_processing.set(truncateFilename(video.filename))
             tkinter_window.update()
 
             proc = ''
-            if isMacOs():
+            if isLinuxOs(): #apparently Linux may also register as Mac, so check Linux first
+                global g_lin_pid
+                #Assuming linux user has ffmpeg installed, e.g. via apt install ffmpeg.
+                proc = subprocess.Popen(f'ffmpeg -v error -i {shlex.quote(video.full_filepath)} -f null - 2>&1', shell=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                g_lin_pid = proc.pid
+            elif isMacOs():
                 global g_mac_pid
                 proc = subprocess.Popen(f'./ffmpeg -v error -i {shlex.quote(video.full_filepath)} -f null - 2>&1', shell=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -264,10 +313,7 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
                 proc = subprocess.Popen(f'"{ffmpeg_path}" -v error -i "{video.full_filepath}" -f null error.log', shell=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 g_windows_pid = proc.pid
-            else:
-                # Linux not yet supported
-                exit()
-
+            
             output, error = proc.communicate()
 
             # Debug
@@ -279,17 +325,17 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
                 row_index = (count + 1) - index_start
 
             ffmpeg_result = ''
-            if isMacOs():
-                ffmpeg_result = output
-            elif isWindowsOs():
+            if isWindowsOs():
                 ffmpeg_result = error
+            else:
+                ffmpeg_result = output
 
             elapsed_time = time.time() - start_time
             readable_time = convertTime(elapsed_time)
             row = ''
             if not ffmpeg_result:
                 # Healthy
-                print("\033[92m{0}\033[00m".format("HEALTHY -> {}".format(video.filename)), end='\n')  # red
+                print("\033[92m{0}\033[00m".format("HEALTHY -> {}, [T={}]".format(video.filename, readable_time)), end='\n')  # green
 
                 log_file.write('=================================================================\n')
                 log_file.write(f'{video.filename}\n')
@@ -298,12 +344,13 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
                 log_file.flush()
 
                 row = [video.filename, 0]
-                listbox_completed_videos.insert(tk.END, f' {video.filename}')
+                listbox_completed_videos.insert(tk.END, f'{video.filename}')
                 listbox_completed_videos.itemconfig(row_index, bg='green')
                 tkinter_window.update()
             else:
                 # Corrupt
-                print("\033[31m{0}\033[00m".format("CORRUPTED -> {}".format(video.filename)), end='\n')  # red
+                process_errors += 1
+                print("\033[31m{0}\033[00m".format("CORRUPTED -> {}, [T={}]".format(video.filename, readable_time)), end='\n')  # red
 
                 log_file.write('=================================================================\n')
                 log_file.write(f'{video.filename}\n')
@@ -312,7 +359,7 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
                 log_file.flush()
 
                 row = [video.filename, 1]
-                listbox_completed_videos.insert(tk.END, f' {video.filename}')
+                listbox_completed_videos.insert(tk.END, f'{video.filename}')
                 listbox_completed_videos.itemconfig(row_index, bg='red')
                 tkinter_window.update()
 
@@ -336,17 +383,18 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
         end_time = datetime.now().strftime('%Y-%m-%d %I:%M %p')
 
         print(f'Finished: {end_time}')
-        log_file.write('=================================================================\n')
-        log_file.write(f'SUCCESSFULLY PROCESSED {(totalVideoFiles + 1) - index_start} VIDEO FILES\n')
-        log_file.write(f'END TIME: {end_time}\n')
-        log_file.write('=================================================================\n')
-        log_file.flush()
+        omniLog(f'=================================================================\n'
+            'SUCCESSFULLY PROCESSED {(totalVideoFiles + 1) - index_start} VIDEO FILES\n'
+            'END TIME: {end_time}\n'
+            '=================================================================\n', log_file)
         log_file.close()
+        log_file=None
+        g_force_cancel_thread = True #set the end flag to notify the exit function that the thread's already done
     except Exception as e:
-        log_file.write(f'ERROR in "inspectVideoFiles" (aka main thread): {e}\n')
-        log_file.flush()
+        omniLog(f'ERROR in "inspectVideoFiles" (aka main thread): {e}\n',log_file)
 
-def start_program(directory, root, index_start, log_file, label_chosen_directory, label_chosen_directory_var, label_video_count, label_video_count_var, label_index_start, entry_index_input, label_explanation, button_start, listbox_completed_videos):
+def start_program(directory, root, index_start, label_chosen_directory, label_chosen_directory_var, label_video_count, label_video_count_var, label_index_start, entry_index_input, label_explanation, button_start, scrollframe, x_scrollbar, y_scrollbar, listbox_completed_videos):
+    global log_file
     try:
         label_chosen_directory.destroy()
         label_chosen_directory_var.destroy()
@@ -357,6 +405,9 @@ def start_program(directory, root, index_start, log_file, label_chosen_directory
         label_explanation.destroy()
         button_start.destroy()
         listbox_completed_videos.destroy()
+        x_scrollbar.destroy()
+        y_scrollbar.destroy()
+        scrollframe.destroy()
 
         label_progress_text = tk.Label(root, text="Progress:", font=('Helvetica Bold', 18))
         label_progress_text.pack(fill=tk.X, pady=10)
@@ -375,34 +426,47 @@ def start_program(directory, root, index_start, log_file, label_chosen_directory
         g_count.set("0 / 0")
         label_count_var = tk.Label(root, textvariable=g_count, font=('Helvetica', 16))
         label_count_var.pack(fill=tk.X, pady=(0, 10))
+        
+        label_currently_processing_text = tk.Label(root, text="Good / Corrupt:", font=('Helvetica Bold', 16))
+        label_currently_processing_text.pack(fill=tk.X, pady=10)
 
         g_currently_processing.set("N/A")
         label_currently_processing_var = tk.Label(root, textvariable=g_currently_processing, font=('Helvetica', 16))
         label_currently_processing_var.pack(fill=tk.X, pady=(0, 10))
 
-        listbox_completed_videos = tk.Listbox(root, font=('Helvetica', 16))
-        listbox_completed_videos.pack(expand=False, fill=tk.BOTH, side=tk.TOP, padx=10, pady=10)
+        scrollframe = tk.Frame(root)
+        scrollframe.pack(side=tk.TOP, expand=1, fill=tk.BOTH, pady=(0, 10))
+        
+        listbox_completed_videos = tk.Listbox(scrollframe, font=('Courier', 16)) #Using serif font to show I/l/O/0/etc. more clearly
+        listbox_completed_videos.pack(expand=1, fill=tk.BOTH, side=tk.LEFT, pady=10)
         listbox_completed_videos.bind('<<ListboxSelect>>', lambda e: "break")
-        listbox_completed_videos.bind('<Button-1>', lambda e: "break")
-        listbox_completed_videos.bind('<Button-2>', lambda e: "break")
-        listbox_completed_videos.bind('<Button-3>', lambda e: "break")
-        listbox_completed_videos.bind('<ButtonRelease-1>', lambda e: "break")
-        listbox_completed_videos.bind('<Double-1>', lambda e: "break")
-        listbox_completed_videos.bind('<Double-Button-1>', lambda e: "break")
-        listbox_completed_videos.bind('<B1-Motion>', lambda e: "break")
+        #listbox_completed_videos.bind('<Button-1>', lambda e: "break")
+        #listbox_completed_videos.bind('<Button-2>', lambda e: "break")
+        #listbox_completed_videos.bind('<Button-3>', lambda e: "break")
+        #listbox_completed_videos.bind('<ButtonRelease-1>', lambda e: "break")
+        #listbox_completed_videos.bind('<Double-1>', lambda e: "break")
+        #listbox_completed_videos.bind('<Double-Button-1>', lambda e: "break")
+        #listbox_completed_videos.bind('<B1-Motion>', lambda e: "break")
+        
+        y_scrollbar = tk.Scrollbar(scrollframe, orient=tk.VERTICAL, command=listbox_completed_videos.yview)
+        y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox_completed_videos.config(yscrollcommand=y_scrollbar.set)
+            
+        x_scrollbar = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=listbox_completed_videos.xview)
+        x_scrollbar.pack(side=tk.TOP, fill=tk.X, pady=10)
+        listbox_completed_videos.config(xscrollcommand=x_scrollbar.set)
 
-        button_ffmpeg_verify = tk.Button(root, text="ffmpeg Status", width=200, command=lambda: verify_ffmpeg_still_running(root))
+        button_ffmpeg_verify = Button(root, text="ffmpeg Status", width=200, command=lambda: verify_ffmpeg_still_running(root))
         button_ffmpeg_verify.pack(pady=10)
 
-        if isMacOs():
+        try: #similar fix for mac-specific button issue - the 'borderless' field doesn't exist off of Mac
             # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
-            button_kill_ffmpeg = MacButton(root, background='#E34234', borderless=1, foreground='white', text="Safely Quit", width=500, command=lambda: kill_ffmpeg_warning(root, log_file))
-            button_kill_ffmpeg.pack(pady=10)
-        elif isWindowsOs():
-            button_kill_ffmpeg = tk.Button(root, background='#E34234', foreground='white', text="Safely Quit", width=200, command=lambda: kill_ffmpeg_warning(root, log_file))
-            button_kill_ffmpeg.pack(pady=10)
+            button_kill_ffmpeg = Button(root, background='#E34234', borderless=1, foreground='white', text="Safely Quit", width=500, command=lambda: kill_ffmpeg_warning(root))
+        except: #Linux works fine with Windows settings for button
+            button_kill_ffmpeg = Button(root, background='#E34234', foreground='white', text="Safely Quit", width=200, command=lambda: kill_ffmpeg_warning(root))
+        button_kill_ffmpeg.pack(pady=10)
 
-        thread = Thread(target=inspectVideoFiles, args=(directory, root, listbox_completed_videos, index_start, log_file, progress_bar))
+        thread = Thread(target=inspectVideoFiles, args=(directory, root, listbox_completed_videos, index_start, progress_bar))
         thread.start()
     except Exception as e:
         log_file.write(f'ERROR in "start_program": {e}\n')
@@ -414,6 +478,7 @@ def afterDirectoryChosen(root, directory):
     log_file_exists = os.path.isfile(log_file_path)
     if log_file_exists:
         os.remove(log_file_path)
+    global log_file
     log_file = open(log_file_path, 'a', encoding="utf8")
 
     # Logging
@@ -436,8 +501,11 @@ def afterDirectoryChosen(root, directory):
     label_video_count_var = tk.Label(root, text=f"{totalVideos}", font=('Helvetica', 16))
     label_video_count_var.pack(fill=tk.X, pady=(5, 20))
 
-    listbox_videos_found_with_index = tk.Listbox(root, font=('Helvetica', 16), width=480)
-    listbox_videos_found_with_index.pack(padx=10)
+    scrollframe = tk.Frame(root)
+    scrollframe.pack(side=tk.TOP, expand=1, fill=tk.BOTH)
+        
+    listbox_videos_found_with_index = tk.Listbox(scrollframe, font=('Courier', 16))
+    listbox_videos_found_with_index.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, pady=10)
     listbox_videos_found_with_index.bind('<<ListboxSelect>>', lambda e: "break")
     listbox_videos_found_with_index.bind('<Button-1>', lambda e: "break")
     listbox_videos_found_with_index.bind('<Button-2>', lambda e: "break")
@@ -446,6 +514,14 @@ def afterDirectoryChosen(root, directory):
     listbox_videos_found_with_index.bind('<Double-1>', lambda e: "break")
     listbox_videos_found_with_index.bind('<Double-Button-1>', lambda e: "break")
     listbox_videos_found_with_index.bind('<B1-Motion>', lambda e: "break")
+    
+    y_scrollbar = tk.Scrollbar(scrollframe, orient=tk.VERTICAL, command=listbox_videos_found_with_index.yview)
+    y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    listbox_videos_found_with_index.config(yscrollcommand=y_scrollbar.set)
+        
+    x_scrollbar = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=listbox_videos_found_with_index.xview)
+    x_scrollbar.pack(side=tk.TOP, fill=tk.X, pady=10)
+    listbox_videos_found_with_index.config(xscrollcommand=x_scrollbar.set)
 
     all_videos_found = getAllVideoFiles(directory)
     for video in all_videos_found:
@@ -468,7 +544,7 @@ def afterDirectoryChosen(root, directory):
     label_explanation.pack(fill=tk.X, pady=5, padx=20)
 
     if totalVideos > 0:
-        button_start = tk.Button(root, text="Start Inspecting", width=25, command=lambda: start_program(directory, root, int(entry_index_input.get()), log_file, label_chosen_directory, label_chosen_directory_var, label_video_count, label_video_count_var, label_index_start, entry_index_input, label_explanation, button_start, listbox_videos_found_with_index))
+        button_start = Button(root, text="Start Inspecting", width=25, command=lambda: start_program(directory, root, int(entry_index_input.get()), label_chosen_directory, label_chosen_directory_var, label_video_count, label_video_count_var, label_index_start, entry_index_input, label_explanation, button_start, scrollframe, x_scrollbar, y_scrollbar, listbox_videos_found_with_index))
         button_start.pack(pady=20)
     else:
         root.withdraw()
@@ -480,33 +556,48 @@ def afterDirectoryChosen(root, directory):
         label_error_msg = tk.Label(error_window, width=375, text="No video files found in selected directory!", font=('Helvetica', 14))
         label_error_msg.pack(fill=tk.X, pady=20)
 
-        button_exit = tk.Button(error_window, text="Exit", width=30, command=lambda: exit())
+        button_exit = Button(error_window, text="Exit", width=30, command=lambda: exit())
         button_exit.pack()
 
 # ========================= MAIN ==========================
 
-if isLinuxOs():
-    # Linux not yet supported
-    exit()
+if not (isLinuxOs() or isMacOs() or isWindowsOs()):
+    exit(1)
+print("Linux:", isLinuxOs())
+print("Mac:", isMacOs())
+print("Windows:", isWindowsOs())
 
 root = tk.Tk()
 root.title("Corrupt Video Inspector")
-if isMacOs():
-    root.geometry("500x650")
-if isWindowsOs():
-    root.geometry("500x750")
-    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon.ico'))
-    root.iconbitmap(default=icon_path)
+try:
+    if isLinuxOs(): #start button appears offscreen if using mac dimensions
+        root.geometry("600x800")
+        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon.png'))
+        root.iconphoto(False, tk.PhotoImage(file=icon_path))
+    elif isMacOs():
+        root.geometry("500x650")
+    elif isWindowsOs():
+        root.geometry("500x750")
+        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon.ico'))
+        root.iconbitmap(default=icon_path)
+except _tkinter.TclError as e: #assorted icon errors if someone's running this from source in a different folder
+    print(e)
 g_progress = tk.StringVar()
 g_count = tk.StringVar()
 g_currently_processing = tk.StringVar()
+g_force_cancel_thread = False
 g_mac_pid = ''
+g_lin_pid = ''
 g_windows_pid = ''
+log_file = None
 
 label_select_directory = tk.Label(root, wraplength=450, justify="left", text="Select a directory to search for all video files within the chosen directory and all of its containing subdirectories", font=('Helvetica', 16))
 label_select_directory.pack(fill=tk.X, pady=20, padx=20)
 
-button_select_directory = tk.Button(root, text="Select Directory", width=20, command=lambda: selectDirectory(root, label_select_directory, button_select_directory))
+button_select_directory = Button(root, text="Select Directory", width=20, command=lambda: selectDirectory(root, label_select_directory, button_select_directory))
 button_select_directory.pack(pady=20)
+
+#Handle proper shutdown of subprocess on window close:
+root.protocol("WM_DELETE_WINDOW", lambda: kill_ffmpeg_warning(root))
 
 root.mainloop()
