@@ -39,7 +39,7 @@ def omniLog(msg, log_file):
 def isMacOs():
     if 'Darwin' in platform.system():
         return True
-    return True
+    return False
 
 def isWindowsOs():
     if 'Windows' in platform.system():
@@ -121,7 +121,7 @@ def verify_ffmpeg_still_running(root):
     output = ''
     cpu_usage = ''
 
-    if isLinuxOs(): #Need to run Linux check first, Linux (at least mine) also registers as Darwin?! so we need to target the right system
+    if isLinuxOs():
         proc = subprocess.Popen("ps -Ao comm,pcpu | grep ffmpeg", shell=True, stdout=subprocess.PIPE)
         output = proc.communicate()[0].decode('utf-8').strip()
         if "ffmpeg" in output:
@@ -169,10 +169,10 @@ def kill_ffmpeg_warning(root):
         label_ffmpeg_kill = tk.Label(ffmpeg_kill_window, wraplength=375, width=375, text="This application spawns a subprocess named 'ffmpeg'. If this program is quit using the 'X' button, for example, the 'ffmpeg' subprocess will continue to run in the background of the host computer, draining the CPU resources. Clicking the button below will terminate the 'ffmpeg' subprocess and safely quit the application. This will prematurely end all video processing. Only do this if you want to safely exit the program and clean all subprocesses", font=('Helvetica', 14))
         label_ffmpeg_kill.pack(fill=tk.X, pady=20)
 
-        try: #Mac-specific button handling code is somehow getting run on some Linux systems. Changed imports, only difference is mac has 'borderless'
+        if isMacOs(): only difference is mac has 'borderless'
             # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
             button_kill_ffmpeg = Button(ffmpeg_kill_window, background='#E34234', borderless=1, foreground='white', text="Terminate Program", width=500, command=lambda: kill_ffmpeg(root))
-        except: #Windows or Linux - if the custom button fields don't exist, create the button without them
+        else: #Windows or Linux - the custom button fields don't exist, create the button without them
             button_kill_ffmpeg = Button(ffmpeg_kill_window, background='#E34234', foreground='white', text="Terminate Program", width=200, command=lambda: kill_ffmpeg(root))
         button_kill_ffmpeg.pack(pady=10)
     else:
@@ -459,10 +459,10 @@ def start_program(directory, root, index_start, label_chosen_directory, label_ch
         button_ffmpeg_verify = Button(root, text="ffmpeg Status", width=200, command=lambda: verify_ffmpeg_still_running(root))
         button_ffmpeg_verify.pack(pady=10)
 
-        try: #similar fix for mac-specific button issue - the 'borderless' field doesn't exist off of Mac
+        if isMacOs(): #similar fix for mac-specific button issue - the 'borderless' field doesn't exist off of Mac
             # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
             button_kill_ffmpeg = Button(root, background='#E34234', borderless=1, foreground='white', text="Safely Quit", width=500, command=lambda: kill_ffmpeg_warning(root))
-        except: #Linux works fine with Windows settings for button
+        else: #Linux works fine with Windows settings for button
             button_kill_ffmpeg = Button(root, background='#E34234', foreground='white', text="Safely Quit", width=200, command=lambda: kill_ffmpeg_warning(root))
         button_kill_ffmpeg.pack(pady=10)
 
