@@ -296,7 +296,7 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
             tkinter_window.update()
 
             proc = ''
-            if isLinuxOs(): #apparently Linux may also register as Mac, so check Linux first
+            if isLinuxOs():
                 global g_lin_pid
                 #Assuming linux user has ffmpeg installed, e.g. via apt install ffmpeg.
                 proc = subprocess.Popen(f'ffmpeg -v error -i {shlex.quote(video.full_filepath)} -f null - 2>&1', shell=True,
@@ -384,8 +384,8 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
 
         print(f'Finished: {end_time}')
         omniLog(f'=================================================================\n'
-            'SUCCESSFULLY PROCESSED {(totalVideoFiles + 1) - index_start} VIDEO FILES\n'
-            'END TIME: {end_time}\n'
+            f'SUCCESSFULLY PROCESSED {(totalVideoFiles + 1) - index_start} VIDEO FILES\n'
+            f'END TIME: {end_time}\n'
             '=================================================================\n', log_file)
         log_file.close()
         log_file=None
@@ -426,9 +426,6 @@ def start_program(directory, root, index_start, label_chosen_directory, label_ch
         g_count.set("0 / 0")
         label_count_var = tk.Label(root, textvariable=g_count, font=('Helvetica', 16))
         label_count_var.pack(fill=tk.X, pady=(0, 10))
-        
-        label_currently_processing_text = tk.Label(root, text="Good / Corrupt:", font=('Helvetica Bold', 16))
-        label_currently_processing_text.pack(fill=tk.X, pady=10)
 
         g_currently_processing.set("N/A")
         label_currently_processing_var = tk.Label(root, textvariable=g_currently_processing, font=('Helvetica', 16))
