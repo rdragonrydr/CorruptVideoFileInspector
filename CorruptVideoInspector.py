@@ -169,7 +169,7 @@ def kill_ffmpeg_warning(root):
         label_ffmpeg_kill = tk.Label(ffmpeg_kill_window, wraplength=375, width=375, text="This application spawns a subprocess named 'ffmpeg'. If this program is quit using the 'X' button, for example, the 'ffmpeg' subprocess will continue to run in the background of the host computer, draining the CPU resources. Clicking the button below will terminate the 'ffmpeg' subprocess and safely quit the application. This will prematurely end all video processing. Only do this if you want to safely exit the program and clean all subprocesses", font=('Helvetica', 14))
         label_ffmpeg_kill.pack(fill=tk.X, pady=20)
 
-        if isMacOs(): only difference is mac has 'borderless'
+        if isMacOs(): #only difference is mac has 'borderless'
             # https://stackoverflow.com/questions/1529847/how-to-change-the-foreground-or-background-colour-of-a-tkinter-button-on-mac-os
             button_kill_ffmpeg = Button(ffmpeg_kill_window, background='#E34234', borderless=1, foreground='white', text="Terminate Program", width=500, command=lambda: kill_ffmpeg(root))
         else: #Windows or Linux - the custom button fields don't exist, create the button without them
