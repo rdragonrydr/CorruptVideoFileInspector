@@ -432,10 +432,10 @@ def start_program(directory, root, index_start, label_chosen_directory, label_ch
         label_currently_processing_var.pack(fill=tk.X, pady=(0, 10))
 
         scrollframe = tk.Frame(root)
-        scrollframe.pack(side=tk.TOP, expand=1, fill=tk.BOTH, pady=(0, 10))
+        scrollframe.pack(side=tk.TOP, expand=1, fill=tk.BOTH)
         
         listbox_completed_videos = tk.Listbox(scrollframe, font=('Courier', 16)) #Using serif font to show I/l/O/0/etc. more clearly
-        listbox_completed_videos.pack(expand=1, fill=tk.BOTH, side=tk.LEFT, pady=10)
+        listbox_completed_videos.pack(expand=1, fill=tk.BOTH, side=tk.LEFT)
         listbox_completed_videos.bind('<<ListboxSelect>>', lambda e: "break")
         #listbox_completed_videos.bind('<Button-1>', lambda e: "break")
         #listbox_completed_videos.bind('<Button-2>', lambda e: "break")
@@ -450,7 +450,7 @@ def start_program(directory, root, index_start, label_chosen_directory, label_ch
         listbox_completed_videos.config(yscrollcommand=y_scrollbar.set)
             
         x_scrollbar = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=listbox_completed_videos.xview)
-        x_scrollbar.pack(side=tk.TOP, fill=tk.X, pady=10)
+        x_scrollbar.pack(side=tk.TOP, fill=tk.X)
         listbox_completed_videos.config(xscrollcommand=x_scrollbar.set)
 
         button_ffmpeg_verify = Button(root, text="ffmpeg Status", width=200, command=lambda: verify_ffmpeg_still_running(root))
@@ -502,7 +502,7 @@ def afterDirectoryChosen(root, directory):
     scrollframe.pack(side=tk.TOP, expand=1, fill=tk.BOTH)
         
     listbox_videos_found_with_index = tk.Listbox(scrollframe, font=('Courier', 16))
-    listbox_videos_found_with_index.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, pady=10)
+    listbox_videos_found_with_index.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
     listbox_videos_found_with_index.bind('<<ListboxSelect>>', lambda e: "break")
     listbox_videos_found_with_index.bind('<Button-1>', lambda e: "break")
     listbox_videos_found_with_index.bind('<Button-2>', lambda e: "break")
@@ -517,7 +517,7 @@ def afterDirectoryChosen(root, directory):
     listbox_videos_found_with_index.config(yscrollcommand=y_scrollbar.set)
         
     x_scrollbar = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=listbox_videos_found_with_index.xview)
-    x_scrollbar.pack(side=tk.TOP, fill=tk.X, pady=10)
+    x_scrollbar.pack(side=tk.TOP, fill=tk.X)
     listbox_videos_found_with_index.config(xscrollcommand=x_scrollbar.set)
 
     all_videos_found = getAllVideoFiles(directory)
