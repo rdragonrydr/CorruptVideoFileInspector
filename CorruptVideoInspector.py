@@ -371,9 +371,10 @@ def inspectVideoFiles(directory, tkinter_window, listbox_completed_videos, index
             g_progress.set(calculateProgress(count, totalVideoFiles))
             tkinter_window.update()
 
-        g_count.set("---")
-        g_currently_processing.set("N/A")
+        g_count.set(f"Damaged files found: {process_errors}")
+        g_currently_processing.set("Finished!")
         progress_bar.stop()
+        progress_bar['mode'] = 'determinate'
         progress_bar['value'] = 100
         tkinter_window.update()
 
@@ -577,7 +578,7 @@ try:
         root.geometry("500x750")
         icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'icon.ico'))
         root.iconbitmap(default=icon_path)
-except _tkinter.TclError as e: #assorted icon errors if someone's running this from source in a different folder
+except Exception as e: #assorted icon errors if someone's running this from source in a different folder
     print(e)
 g_progress = tk.StringVar()
 g_count = tk.StringVar()
